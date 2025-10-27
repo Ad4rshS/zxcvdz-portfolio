@@ -17,7 +17,7 @@ document.querySelectorAll('a[href^="#"]').forEach(anchor => {
 const navbar = document.querySelector('.navbar');
 window.addEventListener('scroll', () => {
     if (window.scrollY > 100) {
-        navbar.style.boxShadow = '0 5px 30px rgba(236, 72, 153, 0.15)';
+        navbar.style.boxShadow = '0 5px 30px rgba(59, 130, 246, 0.15)';
     } else {
         navbar.style.boxShadow = '0 2px 20px rgba(0, 0, 0, 0.05)';
     }
@@ -153,13 +153,16 @@ const createCursorTrail = () => {
 window.addEventListener('load', () => {
     // Add loaded class to body for any CSS animations
     document.body.classList.add('loaded');
-    
+
     // Trigger any initial animations
     const heroContent = document.querySelector('.hero-content');
     if (heroContent) {
         heroContent.style.opacity = '1';
         heroContent.style.transform = 'translateY(0)';
     }
+
+    // Initialize drag and drop functionality
+    initializeDragAndDrop();
 });
 
 // Add typing effect to tagline (optional)
@@ -176,9 +179,180 @@ const typeWriter = (element, text, speed = 100) => {
     type();
 };
 
-// Uncomment to enable typing effect on tagline
-// const tagline = document.querySelector('.hero-tagline');
-// if (tagline) {
-//     const originalText = tagline.textContent;
-//     typeWriter(tagline, originalText, 80);
-// }
+// Drag and Drop functionality for customization
+let draggedElement = null;
+let dragOffset = { x: 0, y: 0 };
+let originalPosition = { x: 0, y: 0 };
+
+// Make elements draggable
+function makeElementDraggable(element) {
+    element.style.cursor = 'grab';
+    element.style.position = 'relative';
+    element.style.zIndex = '10';
+
+    element.addEventListener('mousedown', (e) => {
+        if (e.button !== 0) return; // Only left mouse button
+
+        draggedElement = element;
+        const rect = element.getBoundingClientRect();
+        const parentRect = element.parentElement.getBoundingClientRect();
+
+        dragOffset.x = e.clientX - rect.left;
+        dragOffset.y = e.clientY - rect.top;
+        originalPosition.x = rect.left - parentRect.left;
+        originalPosition.y = rect.top - parentRect.top;
+
+        element.style.cursor = 'grabbing';
+        element.style.zIndex = '1000';
+
+        // Add visual feedback
+        element.style.boxShadow = '0 10px 30px rgba(59, 130, 246, 0.3)';
+        element.style.transform = 'scale(1.05)';
+
+        e.preventDefault();
+    });
+
+    element.addEventListener('mousemove', (e) => {
+        if (draggedElement !== element) return;
+
+        const parentRect = element.parentElement.getBoundingClientRect();
+        const newX = e.clientX - parentRect.left - dragOffset.x;
+        const newY = e.clientY - parentRect.top - dragOffset.y;
+
+        // Constrain to parent bounds
+        const maxX = parentRect.width - element.offsetWidth;
+        const maxY = parentRect.height - element.offsetHeight;
+
+        const constrainedX = Math.max(0, Math.min(newX, maxX));
+        const constrainedY = Math.max(0, Math.min(newY, maxY));
+
+        element.style.left = constrainedX + 'px';
+        element.style.top = constrainedY + 'px';
+    });
+
+    element.addEventListener('mouseup', () => {
+        if (draggedElement !== element) return;
+
+        draggedElement = null;
+        element.style.cursor = 'grab';
+        element.style.zIndex = '10';
+
+        // Remove visual feedback
+        element.style.boxShadow = '';
+        element.style.transform = '';
+
+        // Save position (you can extend this to save to localStorage or send to server)
+        saveElementPosition(element);
+    });
+
+    element.addEventListener('mouseleave', () => {
+        if (draggedElement === element) {
+            // Continue dragging even when mouse leaves the element
+        }
+    });
+}
+
+// Save element position
+function saveElementPosition(element) {
+    const position = {
+        id: element.id || element.className,
+        left: element.style.left,
+        top: element.style.top
+    };
+
+    // Save to localStorage for persistence
+    const positions = JSON.parse(localStorage.getItem('elementPositions') || '[]');
+    const existingIndex = positions.findIndex(p => p.id === position.id);
+
+    if (existingIndex >= 0) {
+        positions[existingIndex] = position;
+    } else {
+        positions.push(position);
+    }
+
+    localStorage.setItem('elementPositions', JSON.stringify(positions));
+
+    // You can also send this to your backend API here
+    console.log('Element position saved:', position);
+}
+
+// Load saved positions
+function loadSavedPositions() {
+    const positions = JSON.parse(localStorage.getItem('elementPositions') || '[]');
+
+    positions.forEach(position => {
+        const element = document.querySelector(`#${position.id}`) ||
+                       document.querySelector(`.${position.id.split(' ').join('.')}`);
+        if (element) {
+            element.style.left = position.left;
+            element.style.top = position.top;
+        }
+    });
+}
+
+// Initialize drag and drop for draggable elements
+function initializeDragAndDrop() {
+    // Make specific elements draggable
+    const draggableElements = document.querySelectorAll('.profile-image-wrapper, .skill-card, .project-card, .contact-method');
+
+    draggableElements.forEach(element => {
+        makeElementDraggable(element);
+    });
+
+    // Load saved positions
+    loadSavedPositions();
+}
+
+// Keyboard shortcuts for precise positioning
+document.addEventListener('keydown', (e) => {
+    if (!draggedElement) return;
+
+    const step = e.shiftKey ? 10 : 1; // Larger steps with Shift
+
+    switch(e.key) {
+        case 'ArrowUp':
+            e.preventDefault();
+            adjustElementPosition(draggedElement, 0, -step);
+            break;
+        case 'ArrowDown':
+            e.preventDefault();
+            adjustElementPosition(draggedElement, 0, step);
+            break;
+        case 'ArrowLeft':
+            e.preventDefault();
+            adjustElementPosition(draggedElement, -step, 0);
+            break;
+        case 'ArrowRight':
+            e.preventDefault();
+            adjustElementPosition(draggedElement, step, 0);
+            break;
+        case 'Escape':
+            // Reset to original position
+            if (draggedElement) {
+                draggedElement.style.left = originalPosition.x + 'px';
+                draggedElement.style.top = originalPosition.y + 'px';
+                draggedElement.style.cursor = 'grab';
+                draggedElement.style.zIndex = '10';
+                draggedElement.style.boxShadow = '';
+                draggedElement.style.transform = '';
+                draggedElement = null;
+            }
+            break;
+    }
+});
+
+// Adjust element position with keyboard
+function adjustElementPosition(element, deltaX, deltaY) {
+    const currentLeft = parseInt(element.style.left) || 0;
+    const currentTop = parseInt(element.style.top) || 0;
+
+    const parentRect = element.parentElement.getBoundingClientRect();
+    const maxX = parentRect.width - element.offsetWidth;
+    const maxY = parentRect.height - element.offsetHeight;
+
+    const newX = Math.max(0, Math.min(currentLeft + deltaX, maxX));
+    const newY = Math.max(0, Math.min(currentTop + deltaY, maxY));
+
+    element.style.left = newX + 'px';
+    element.style.top = newY + 'px';
+}
